@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "unique-interface"
+version = "0.1.0"
+description = "Unique's black-and-white chat and file-review components for Python notebooks."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{name = "Unique50101"}]
+dependencies = ["ipywidgets>=8.1,<9", "ipython>=8"]
+[project.urls]
+Repository = "https://github.com/Unique50101/unique-interface"
+[tool.setuptools]
+packages = ["unique_interface"]
+[tool.setuptools.package-data]
+unique_interface = ["logo.b64"]
