@@ -126,3 +126,26 @@ demo.launch()
 For a server-side Python callback, use a Docker Space if available on your account. For static browser inference, duplicate the UniqueChat Static Space described above. Hugging Face manages the global SDK picker. Unique Interface is installed or exported inside the chosen SDK.
 
 [Copy the Docker Space starter](https://github.com/Unique50101/unique-interface/tree/main/examples/docker-space). Put its README.md, Dockerfile and app.py in the root of your Docker Space and edit `predict`. The starter calls `launch(space=True)` to serve the permanent Space address on port 7860.
+
+## Function apps in 0.1.6
+
+Use a dropdown, radio buttons, checkbox group, color picker, code box, or editable table in a Python app. Table inputs arrive as rows of cell text. Line and bar plots accept numeric sequences. Scatter plots accept pairs of coordinates.
+
+```python
+from unique_interface import Dataframe, Interface, ScatterPlot
+
+def plot(rows):
+    return [(float(x), float(y)) for x, y in rows]
+
+demo = Interface(plot, Dataframe(["X", "Y"]), ScatterPlot(),
+                 examples=[[[["1", "3"], ["2", "5"]]]], theme="auto")
+demo.launch()
+```
+
+Use **Add row** or load the example, edit the cells, then click **Run**. With `cache_examples=True`, Python computes the supplied examples at app construction and reuses their results for matching requests. Use caching for deterministic callbacks.
+
+- Compose function apps with `TabbedInterface([app1, app2], ["First", "Second"])`. Named endpoints are prefixed by their zero-based tab number, such as `tab0_predict`.
+- Add `Group` and `Accordion` layouts inside `Blocks`. Bind a component with `.change(fn, inputs, outputs)`, `.submit(...)` for Enter, or `.upload(...)` for files. Use `theme="light"`, `"dark"`, or `"auto"` on the outer app.
+- Open **Use via API** in a function app to inspect its endpoints and send JSON requests. In Python, use `Client(url).schema()` and `Client(url).predict(*values, api_name="predict")` after importing `Client` from `unique_interface`. Responses include `outputs` and `duration_ms`.
+- Same-origin JavaScript can use `import {Client} from "/client.mjs"` and `await new Client(location.origin).predict([value])`. This module is served by the running app.
+- Control concurrent callbacks with `launch(concurrency_limit=2, max_pending=4)`. When the running and waiting slots are full, another request receives HTTP 429. The default runs one callback at a time. Increase concurrency only for callbacks that support concurrent use.

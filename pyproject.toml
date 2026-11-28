@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "unique-interface"
-version = "0.1.5"
+version = "0.1.6"
 description = "Build, time and share browser interfaces for Python functions and machine learning demos."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -15,5 +15,5 @@ Repository = "https://github.com/Unique50101/unique-interface"
 [tool.setuptools]
 packages = ["unique_interface"]
 [tool.setuptools.package-data]
-unique_interface = ["logo.b64", "chat.html", "form.html"]
+unique_interface = ["logo.b64", "chat.html", "form.html", "api.html", "client.mjs"]
 

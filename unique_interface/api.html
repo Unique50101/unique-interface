@@ -1,0 +1,21 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Use via API · Unique Interface</title><style>body{max-width:740px;margin:4vh auto;padding:1em;font:16px/1.5 system-ui}textarea,pre{width:100%;box-sizing:border-box;padding:1em;white-space:pre-wrap}label{display:block}button,select{padding:.6em}</style>
+<a href="/">App</a><h1>Use via API</h1><p id="description"></p><label>Endpoint <select id="event"></select></label><pre id="signature"></pre>
+<form><label>Inputs (JSON array)<textarea rows="4" required>[]</textarea></label><button>Send request</button></form><pre role="status"></pre>
+<script type="module">
+import {Client} from '/client.mjs';
+const client = new Client(location.origin), schema = await client.schema();
+const menu = document.querySelector('select'), status = document.querySelector('[role=status]');
+for(const name of Object.keys(schema.events)) menu.add(new Option(name,name));
+function describe(){
+ const event=schema.events[menu.value], label=id=>schema.fields[id].label+' ('+schema.fields[id].type+')';
+ document.querySelector('#signature').textContent='POST /api/'+menu.value+'\nInputs: '+event.inputs.map(label).join(', ')+'\nOutputs: '+event.outputs.map(label).join(', ');
+}
+if(menu.length)describe();
+menu.onchange=describe;
+document.querySelector('form').onsubmit=async e=>{
+ e.preventDefault();status.textContent='Running…';
+ try{const inputs=JSON.parse(document.querySelector('textarea').value);status.textContent=JSON.stringify(await client.predict(inputs,menu.value),null,2)}
+ catch(err){status.textContent=err.message}
+};
+</script></html>

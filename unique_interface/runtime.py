@@ -32,14 +32,20 @@ class App:
 
 
 def launch(*, form=None, chat=None, title="UniqueChat", share=False, port=0,
-           open_browser=True, block=None, space=False):
+           open_browser=True, block=None, space=False, concurrency_limit=1, max_pending=None):
     """Serve the app locally and optionally relay this instance over HTTPS."""
     if (form is None) == (chat is None):
         raise ValueError("Supply exactly one function app or chat callback.")
     schema = form.schema() if form is not None else {"title": title, "endpoint": "/reply"}
     page = (files("unique_interface").joinpath("form.html").read_bytes() if form is not None
             else _page(mode="python", title=title).encode())
-    lock = threading.Lock()
+    if type(concurrency_limit) is not int or concurrency_limit < 1:
+        raise ValueError("concurrency_limit must be a positive integer.")
+    if max_pending is not None and (type(max_pending) is not int or max_pending < 0):
+        raise ValueError("max_pending must be a nonnegative integer.")
+    lock = threading.BoundedSemaphore(concurrency_limit)
+    admission = (threading.BoundedSemaphore(concurrency_limit + max_pending)
+                 if max_pending is not None else None)
     allowed = set()
 
     class Handler(BaseHTTPRequestHandler):
@@ -65,6 +71,9 @@ def launch(*, form=None, chat=None, title="UniqueChat", share=False, port=0,
                 return self.send_error(403)
             if self.path == "/":
                 return self.respond(page, "text/html; charset=utf-8")
+            if form is not None and self.path in {"/docs", "/client.mjs"}:
+                asset, mime = ("api.html", "text/html") if self.path == "/docs" else ("client.mjs", "text/javascript")
+                return self.respond(files("unique_interface").joinpath(asset).read_bytes(), mime)
             if self.path == "/health":
                 return self.respond(b"unique-interface-ready", "text/plain")
             if self.path == "/api/schema":
@@ -76,6 +85,15 @@ def launch(*, form=None, chat=None, title="UniqueChat", share=False, port=0,
                 return self.send_error(403)
             if self.headers.get_content_type() != "application/json":
                 return self.send_error(415)
+            if admission is not None and not admission.acquire(blocking=False):
+                return self.respond(b'{"error":"App is busy. Try again later."}', code=429)
+            try:
+                self.invoke()
+            finally:
+                if admission is not None:
+                    admission.release()
+
+        def invoke(self):
             event = self.path.removeprefix("/api/")
             is_chat = chat is not None and self.path == "/reply"
             if not is_chat and (form is None or not self.path.startswith("/api/") or event not in form.events):
