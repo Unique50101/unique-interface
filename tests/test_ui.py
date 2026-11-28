@@ -63,3 +63,26 @@ class Interfaces(unittest.TestCase):
         app.retry.click()
         self.assertEqual(app.history[-1]["content"], "two words")
         self.assertNotIn("partial", app.log.value)
+
+
+    def test_links_and_enter(self):
+        app = ChatInterface(lambda msg, history: msg, public_url="https://example.org/chat")
+        self.assertIn('target="_blank"', app.links.value)
+        with self.assertRaises(ValueError):
+            app.set_links(private_url="javascript:alert(1)")
+        app.prompt.value = "via Enter"
+        app.prompt._submission_callbacks(app.prompt)
+        self.assertEqual(app.history[-1]["content"], "via Enter")
+
+    def test_space_export(self):
+        from unique_interface import export_space
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+        with TemporaryDirectory() as tmp:
+            path = export_space(Path(tmp) / "index.html", title="</script>")
+            html = path.read_text()
+            self.assertIn('"mode": "browser"', html)
+            self.assertNotIn("__CONFIG__", html)
+            self.assertNotIn("__LOGO__", html)
+            with self.assertRaises(FileExistsError):
+                export_space(path)
