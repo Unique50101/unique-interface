@@ -15,7 +15,18 @@ def reply(message, history):
 chat = ChatInterface(reply, title="My chat").launch()
 ```
 
-Chat supports send, retry, clear, and per-instance conversation history. The callback receives the new text and previous messages as role/content dictionaries. Supply your own model or Python function. A failed callback leaves the conversation available for retry.
+The dark chat panel places your messages on the right and replies on the left, with a composer below. Choose **New chat** to start a conversation and use the sidebar to revisit earlier conversations during the widget session.
+
+String replies appear word by word after the callback returns. Use `word_delay=0` for instant display. For live updates while a model generates text, supply a callback that yields successive text chunks. Retry replaces the last answer, and Clear applies to the current thread.
+
+```python
+def stream_reply(message, history):
+    yield "You asked: "
+    yield message
+
+chat = ChatInterface(stream_reply).launch()
+```
+ The callback receives the new text and previous messages as role/content dictionaries. Supply your own model or Python function. A failed callback leaves the conversation available for retry.
 
 ```python
 from unique_interface import FileInterface
