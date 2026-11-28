@@ -34,8 +34,8 @@ async function answer(history,text,update){
 async function respond(retry){
  if(busy)return;const messages=chats[current],before=messages.slice(),text=retry?messages.at(-2)?.content:prompt.value.trim();if(!text)return;
  const prior=retry?messages.slice(0,-2):messages.slice();messages.splice(0,messages.length,...prior,{role:"user",content:text},{role:"assistant",content:""});
- busy=true;status.textContent="Generating…";draw();
- try{await answer(prior,text,chunk=>{messages.at(-1).content+=chunk;log.lastChild.textContent=messages.at(-1).content;log.scrollTop=log.scrollHeight});if(!messages.at(-1).content.trim())throw Error("Empty reply. Please try again.");if(!retry)prompt.value="";status.textContent=""}
+ const started=performance.now();busy=true;status.textContent="Generating…";draw();
+ try{await answer(prior,text,chunk=>{messages.at(-1).content+=chunk;log.lastChild.textContent=messages.at(-1).content;log.scrollTop=log.scrollHeight});if(!messages.at(-1).content.trim())throw Error("Empty reply. Please try again.");if(!retry)prompt.value="";status.textContent="Response time: "+((performance.now()-started)/1000).toFixed(2)+" s"}
  catch(e){messages.splice(0,messages.length,...before);status.textContent=e.message}
  finally{busy=false;draw();prompt.focus()}
 }

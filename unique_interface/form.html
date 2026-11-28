@@ -1,0 +1,36 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Unique Interface</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f6f6f4;color:#1b1b1b;font:16px/1.5 system-ui,sans-serif}main{max-width:780px;margin:6vh auto;padding:32px;background:white;border:1px solid #ddd;border-radius:18px}header{border-bottom:1px solid #ddd;margin-bottom:20px}header small{font-weight:700}h1{font-size:32px;line-height:1.1}.column,.row,article{display:flex;gap:12px}.column,article{flex-direction:column}.row>*{flex:1;min-width:0}label{display:grid;gap:4px;font-weight:600}input,textarea,button,pre{font:inherit;padding:9px;border:1px solid #bbb;border-radius:6px}button{cursor:pointer}button.run,button.active{background:#191919;color:#fff}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f6f4;margin:0;min-height:44px}img,video,audio,svg{max-width:100%}nav{display:flex;gap:6px}#status{min-height:24px}article[hidden]{display:none}@media(max-width:600px){main{margin:0;padding:18px}.row{flex-direction:column}}</style>
+<main><header><small>Unique Interface</small><h1></h1></header><div id="app"></div><p id="status" role="status"></p></main>
+<script type="module">
+const schema=await (await fetch('/api/schema')).json(),fields=schema.fields,items=new Map();
+const status=document.querySelector('#status'), el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n};
+document.title=schema.title;document.querySelector('h1').textContent=schema.title;
+const inputs=new Set(Object.values(schema.events).flatMap(e=>e.inputs));
+function input(field){
+ const kind=field.type;
+ const n=el(kind==='text'||kind==='json'?'textarea':'input');
+ if(n.tagName==='TEXTAREA')n.rows=2;
+ else if(['number','slider','checkbox'].includes(kind)){n.type=kind==='slider'?'range':kind;for(const k of ['min','max','step'])if(k in field)n[k]=field[k]}
+ else{n.type='file';if(kind!=='file')n.accept=kind+'/*'}
+ return n
+}
+function render(node,parent){
+ if(node.type==='field'){
+ const f=fields[node.id],wrap=el('label',f.label),isInput=inputs.has(node.id),n=isInput?input(f):el('div');wrap.append(n);items.set(node.id,n);parent.append(wrap);
+ if(isInput&&f.type==='audio'&&navigator.mediaDevices&&window.MediaRecorder){
+ const button=el('button','Record microphone');button.type='button';wrap.append(button);let rec;
+ button.onclick=async e=>{e.preventDefault();try{if(rec?.state==='recording'){rec.stop();return}const stream=await navigator.mediaDevices.getUserMedia({audio:true});rec=new MediaRecorder(stream);const data=[];rec.ondataavailable=e=>data.push(e.data);rec.onstop=()=>{stream.getTracks().forEach(t=>t.stop());const dt=new DataTransfer();dt.items.add(new File(data,'recording.webm',{type:rec.mimeType}));n.files=dt.files;button.textContent='Record microphone'};rec.start();button.textContent='Stop recording'}catch(err){status.textContent=err.message}}}
+ }else if(node.type==='button'){const b=el('button',node.label);b.className='run';b.onclick=()=>run(node.event,b);parent.append(b)}
+ else{const box=el('div');box.className=node.type;parent.append(box);let nav,panels=[],buttons=[];
+ for(const child of node.children){if(child.type!=='tab'){render(child,box);continue}if(!nav){nav=el('nav');box.append(nav)}const b=el('button',child.label),panel=el('article');buttons.push(b);panels.push(panel);nav.append(b);box.append(panel);panel.hidden=panels.length>1;b.classList.toggle('active',!panel.hidden);b.onclick=()=>panels.forEach((p,i)=>{p.hidden=p!==panel;buttons[i].classList.toggle('active',p===panel)});for(const c of child.children)render(c,panel)}}}
+async function read(id){
+ const n=items.get(id);if(n.type==='file'){const file=n.files[0];if(!file)throw Error('Choose a file first.');if(file.size>10*1024*1024)throw Error('File limit: 10 MiB.');const data=await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(',')[1]);r.onerror=no;r.readAsDataURL(file)});return {name:file.name,mime:file.type,data}}
+ if(n.type==='checkbox')return n.checked;if(['number','range'].includes(n.type))return n.valueAsNumber;return fields[id].type==='json'?JSON.parse(n.value):n.value}
+function show(id,value){
+ const n=items.get(id),kind=fields[id].type;if(inputs.has(id)){if(n.type==='checkbox')n.checked=value;else if(n.type!=='file')n.value=value;return}n.replaceChildren();
+ if(['file','audio','video','image'].includes(kind)){if(n.dataset.url)URL.revokeObjectURL(n.dataset.url);const mime=/^(audio|video)\/[\w.+-]+$|^image\/(png|jpeg|webp|gif)$/.test(value.mime)?value.mime:'application/octet-stream';const url=URL.createObjectURL(new Blob([Uint8Array.from(atob(value.data),x=>x.charCodeAt(0))],{type:mime}));n.dataset.url=url;
+ if(kind!=='file'){const media=el(kind==='image'?'img':kind);media.src=url;media.controls=true;n.append(media)}const a=el('a','Download '+value.name);a.href=url;a.download=value.name;n.append(a)}
+ else if(kind==='chart'){const canvas=el('canvas');canvas.width=600;canvas.height=180;canvas.style.maxWidth='100%';n.append(canvas);const ctx=canvas.getContext('2d'),lo=value.reduce((a,b)=>Math.min(a,b),0),hi=value.reduce((a,b)=>Math.max(a,b),1);ctx.beginPath();value.forEach((v,i)=>{const x=8+584*i/Math.max(1,value.length-1),y=172-164*(v-lo)/(hi-lo);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke()}else n.append(el('pre',typeof value==='string'?value:JSON.stringify(value,null,2)))}
+async function run(name,button){button.disabled=true;status.textContent='Running…';try{const ev=schema.events[name],values=await Promise.all(ev.inputs.map(read));const r=await fetch('/api/'+encodeURIComponent(name),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({inputs:values})});const data=await r.json();if(!r.ok)throw Error(data.error||'Request failed');ev.outputs.forEach((id,i)=>show(id,data.outputs[i]));status.textContent='Response time: '+data.duration_ms+' ms'}catch(e){status.textContent=e.message}finally{button.disabled=false}}
+render(schema.layout,document.querySelector('#app'));
+</script></html>

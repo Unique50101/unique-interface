@@ -1,4 +1,5 @@
 """Unique's notebook-native chat and file interfaces."""
+from time import perf_counter
 import re
 from collections.abc import Iterator
 from base64 import b64encode
@@ -11,6 +12,7 @@ from urllib.parse import urlsplit
 import ipywidgets as w
 from IPython.display import display
 from .web import export_space, serve
+from .forms import Interface, Blocks, Row, Column, Tab, Button, Component, Textbox, Slider, File, Image, Audio, Video, Chart, Upload
 
 _STYLE = """
 .unique-panel{background:white!important;color:#171717!important;border:1px solid #aaa;border-radius:14px;padding:14px;max-width:780px;width:100%!important;box-sizing:border-box;font-family:system-ui,sans-serif}
@@ -80,6 +82,7 @@ class ChatInterface:
     """Notebook chat. The callback returns a string or yields text chunks."""
 
     def __init__(self, fn, *, title="Unique Chat", word_delay=0.035, public_url=None, private_url=None):
+        self.title = title
         self.fn = fn
         self.word_delay = max(0.0, float(word_delay))
         self._threads = [[]]
@@ -184,6 +187,7 @@ class ChatInterface:
         prior = self.history[:-2] if retry else self.history[:]
         pending = prior + [dict(role="user", content=message)]
         self._busy = self.new.disabled = self.send.disabled = self.retry.disabled = self.clear.disabled = True
+        started = perf_counter()
         self.status.value = "Generating reply…"
         self._render(pending)
         animate = False
@@ -207,14 +211,16 @@ class ChatInterface:
             self.history[:] = pending + [dict(role="assistant", content=reply)]
             if not retry:
                 self.prompt.value = ""
-            self.status.value = ""
+            self.status.value = f"Response time: {perf_counter()-started:.2f} s"
         except Exception as exc:
             self.status.value = str(exc)
         finally:
             self._busy = self.new.disabled = self.send.disabled = False
             self._refresh(animate)
 
-    def launch(self):
+    def launch(self, *, share=False, **options):
+        if share or options:
+            return serve(self.fn, title=self.title, share=share, **options)
         display(self.widget)
         return self
 

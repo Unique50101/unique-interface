@@ -77,3 +77,50 @@ review = FileInterface(inspect_file, title="Inspect a file").launch()
 ```
 
 Return a plain-text summary and an optional generated file path to show a download link. The default input limit is 10 MiB. SheetReview's notebook provides a complete CSV/XLSX example.
+
+## Share your own Python function
+
+[Visual documentation and interactive example](https://uniqueopensources.web.app/docs/unique-interface)
+
+```python
+from unique_interface import Interface
+
+def greet(name):
+    return f"Hello, {name}!"
+
+demo = Interface(greet, inputs="text", outputs="text", title="Greeting demo")
+app = demo.launch(share=True)
+```
+
+Visitors to the printed public HTTPS URL call **your running function**. Keep the script or notebook runtime running. Each launch receives a local loopback URL. Sharing is opt-in and uses a temporary Cloudflare Quick Tunnel. On first use the package finds cloudflared on PATH or downloads and checksum-verifies the official helper on supported Windows, macOS and Linux systems. The machine must allow the helper to reach Cloudflare. Anyone with the public URL can invoke the callback. For a membership-restricted permanent URL, deploy a private Space. A loopback address on hosted Colab belongs to the runtime machine.
+
+In notebooks, `app.local_url` and `app.share_url` are available on the returned handle. Call `app.close()` to end both routes. In scripts, launch blocks until Ctrl+C. Pass `block=False` to manage the app lifecycle yourself.
+
+```python
+from unique_interface import ChatInterface
+ChatInterface(lambda message, history: f"You wrote {message}").launch(share=True)
+```
+
+### Inputs, outputs and layouts
+
+Supply component types such as `"text"`, `"number"`, `"checkbox"`, `"json"`, `"image"`, `"audio"`, `"video"`, and `"file"`. Use `Slider(1, 5)` for bounded numeric input. Uploaded media arrives as `Upload(name, mime, data)`; return an Upload to display or download generated media. Audio inputs also support microphone recording in compatible browsers with permission. Return a list of numeric values for a `"chart"` line plot. Multiple outputs use a tuple in declared order.
+
+```python
+from unique_interface import Blocks, Tab, Row, Textbox, Button
+with Blocks("Text tools") as demo:
+    with Tab("Uppercase"), Row():
+        source = Textbox("Input")
+        result = Textbox("Result")
+    Button("Convert").click(str.upper, source, result, api_name="upper")
+demo.launch()
+```
+
+### Call the generated API
+
+`GET /api/schema` describes components and events. POST JSON to `/api/predict` for Interface, or `/api/<api_name>` for a named button callback. Example request: `{"inputs":["Ada"]}`. Example response: `{"outputs":["Hello, Ada!"],"duration_ms":0.4}`. For file inputs send `{"name":"sample.txt","mime":"text/plain","data":"YWJj"}` as the input value. Chat uses `POST /reply` with `{"message":"Hi","history":[]}`, returning newline-delimited JSON. The UI displays elapsed response time for successful runs.
+
+### Permanent Python deployment on Hugging Face
+
+For a server-side Python callback, use a Docker Space if available on your account. For static browser inference, duplicate the UniqueChat Static Space described above. Hugging Face manages the global SDK picker. Unique Interface is installed or exported inside the chosen SDK.
+
+[Copy the Docker Space starter](https://github.com/Unique50101/unique-interface/tree/main/examples/docker-space). Put its README.md, Dockerfile and app.py in the root of your Docker Space and edit `predict`. The starter calls `launch(space=True)` to serve the permanent Space address on port 7860.
