@@ -6,9 +6,11 @@ from html import escape
 from importlib.resources import files
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from urllib.parse import urlsplit
 
 import ipywidgets as w
 from IPython.display import display
+from .web import export_space, serve
 
 _STYLE = """
 .unique-panel{background:white!important;color:#171717!important;border:1px solid #aaa;border-radius:14px;padding:14px;max-width:780px;width:100%!important;box-sizing:border-box;font-family:system-ui,sans-serif}
@@ -40,14 +42,14 @@ def _button(label, primary=False):
 
 
 _CHAT_STYLE = """
-.unique-chat {width:100%;height:clamp(390px,74vh,740px);background:#101010;color:#eee;
+.unique-chat {width:100%;max-width:800px;margin-inline:auto;height:clamp(390px,74vh,740px);background:#101010;color:#eee;
  border:1px solid #353535;border-radius:14px;overflow:hidden;container-type:inline-size;font:14px/1.55 system-ui,sans-serif}
 .unique-chat .widget-html,.unique-chat .widget-label,.unique-chat .widget-html-content {color:inherit;margin:0}
 .unique-chat .widget-button {background:#252525;color:#eee;border:1px solid #444;border-radius:9px;margin:0;padding:0 12px}
 .unique-chat .widget-button:hover {background:#363636}
 .unique-chat .widget-button:focus-visible {outline:2px solid #fff;outline-offset:-3px}
 .unique-chat .widget-button:disabled {opacity:.5}
-.unique-chat .uc-sidebar {background:#171717;border-right:1px solid #303030;padding:14px;gap:10px;overflow:auto;width:200px;flex:none}
+.unique-chat .uc-sidebar {background:#171717;border-right:1px solid #303030;padding:14px;gap:10px;overflow:auto;width:144px;flex:none}
 .unique-chat .uc-brand {display:flex;align-items:center;gap:7px;font-weight:600}
 .unique-chat .uc-brand img {width:52px;height:42px;object-fit:contain}
 .unique-chat .uc-threadlist {gap:4px}
@@ -57,13 +59,13 @@ _CHAT_STYLE = """
 .unique-chat .uc-title {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid #303030;padding:3px 0 10px;font-weight:600}
 .unique-chat .uc-log {flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column-reverse}
 .unique-chat .uc-log .widget-html-content {width:100%}
-.unique-chat .uc-messages,.unique-chat .uc-compose {width:100%;max-width:760px;margin:auto;box-sizing:border-box}
+.unique-chat .uc-messages,.unique-chat .uc-compose {width:100%;max-width:600px;margin:auto;box-sizing:border-box}
 .unique-chat .uc-message {width:fit-content;max-width:100%;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;margin:12px 0 22px;color:#f4f4f4}
 .unique-chat .uc-user {margin-left:auto;max-width:82%;padding:10px 16px;background:#303030;border-radius:18px}
 .unique-chat .uc-assistant {margin-right:auto;padding:0 4px}
 .unique-chat .uc-compose {background:#212121;border:1px solid #434343;border-radius:18px;padding:8px;align-items:center;gap:8px}
-.unique-chat .uc-compose .widget-textarea {flex:1;min-width:0;margin:0}
-.unique-chat .uc-compose textarea {width:100%;height:45px;resize:none;background:#212121;color:white;border:0;padding:7px;font:inherit}
+.unique-chat .uc-compose .widget-text {flex:1;min-width:0;margin:0}
+.unique-chat .uc-compose input {width:100%;height:45px;resize:none;background:#212121;color:white;border:0;padding:7px;font:inherit}
 .unique-chat .uc-compose button {color:#111;background:white;border-radius:20px}
 .unique-chat .uc-tools {gap:6px;align-items:center;flex-wrap:wrap}
 .unique-chat .uc-status {white-space:normal;height:auto}
@@ -77,7 +79,7 @@ _CHAT_STYLE = """
 class ChatInterface:
     """Notebook chat. The callback returns a string or yields text chunks."""
 
-    def __init__(self, fn, *, title="Unique Chat", word_delay=0.035):
+    def __init__(self, fn, *, title="Unique Chat", word_delay=0.035, public_url=None, private_url=None):
         self.fn = fn
         self.word_delay = max(0.0, float(word_delay))
         self._threads = [[]]
@@ -92,19 +94,35 @@ class ChatInterface:
         sidebar = w.VBox([brand, self.new, self._links]).add_class("uc-sidebar")
         self._title = w.HTML()
         self.log = w.HTML().add_class("uc-log")
-        self.prompt = w.Textarea(placeholder="Message Unique…", rows=2)
+        self.prompt = w.Text(placeholder="Message Unique…", continuous_update=False)
         self.status = w.Label().add_class("uc-status")
         self.send = _button("Send")
         self.retry = _button("Retry last reply")
         self.clear = _button("Clear chat")
         self.send.on_click(lambda _: self._respond(False))
+        self.prompt.on_submit(lambda _: self._respond(False))
         self.retry.on_click(lambda _: self._respond(True))
         self.clear.on_click(lambda _: self.reset())
         composer = w.HBox([self.prompt, self.send]).add_class("uc-compose")
         actions = w.HBox([self.retry, self.clear, self.status]).add_class("uc-tools")
-        main = w.VBox([self._title, self.log, actions, composer]).add_class("uc-main")
+        self.links = w.HTML()
+        self.set_links(public_url=public_url, private_url=private_url)
+        main = w.VBox([self._title, self.links, self.log, actions, composer]).add_class("uc-main")
         self.widget = w.HBox([sidebar, main]).add_class("unique-chat")
         self._refresh()
+
+    def set_links(self, *, public_url=None, private_url=None):
+        """Link to existing deployments. Access is enforced by the host."""
+        items = []
+        for label, url in (("Open public chat", public_url), ("Open private chat", private_url)):
+            if url:
+                parsed = urlsplit(url)
+                if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+                    raise ValueError("Use a full HTTP or HTTPS deployment URL without credentials.")
+                items.append(f'<a style="color:inherit" target="_blank" rel="noopener noreferrer" href="{escape(url)}">{label} ↗</a>')
+        self.links.value = " &nbsp; ".join(items)
+        self.links.layout.display = "" if items else "none"
+        return self
 
     def _select(self, index):
         if self._busy:
@@ -241,4 +259,5 @@ class FileInterface:
     def launch(self):
         display(self.widget)
         return self
+
 
