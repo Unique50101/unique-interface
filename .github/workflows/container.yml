@@ -21,7 +21,7 @@ jobs:
           docker build --label org.opencontainers.image.source=https://github.com/Unique50101/unique-interface -t "$image:latest" examples/docker-space
           version=$(docker run --rm "$image:latest" python -c 'from importlib.metadata import version; print(version("unique-interface"))')
           docker tag "$image:latest" "$image:$version"
-          docker run -d --name demo -p 127.0.0.1:7860:7860 "$image:latest"
+          docker run -d -e SPACE_HOST=unique50101-unique-interface.hf.space --name demo -p 127.0.0.1:7860:7860 "$image:latest"
           curl --fail --retry 15 --retry-all-errors --retry-delay 1 http://127.0.0.1:7860/api/schema
           echo "VERSION=$version" >> "$GITHUB_ENV"
       - name: Push the verified container
