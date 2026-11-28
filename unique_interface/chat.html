@@ -1,0 +1,45 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>UniqueChat</title>
+<style>
+*{box-sizing:border-box}html{color-scheme:dark}body{margin:0;background:#101010;color:#eee;font:15px/1.55 system-ui,sans-serif}main{max-width:800px;height:100dvh;margin:auto;display:grid;grid-template-columns:144px minmax(0,1fr);border-inline:1px solid #333}aside{background:#171717;padding:12px 8px;overflow:auto}header{display:flex;align-items:center;gap:6px;font-weight:650}header img{width:46px;height:46px;object-fit:contain}button{background:#252525;color:#eee;border:1px solid #444;padding:7px 11px;border-radius:8px;cursor:pointer}button:disabled{opacity:.45;cursor:default}aside button{display:block;width:100%;margin:7px 0;text-align:left;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.selected{border-color:#bbb}section{min-width:0;padding:12px;display:grid;grid-template-rows:auto 1fr auto auto;gap:10px}h1{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0;padding:6px;border-bottom:1px solid #303030}#log{overflow:auto}.msg{white-space:pre-wrap;overflow-wrap:anywhere;margin:14px 0}.user{margin-left:auto;background:#303030;border-radius:16px;padding:8px 12px;width:fit-content;max-width:83%}.assistant{padding:5px 0}form{display:flex;align-items:center;gap:6px;padding:8px;background:#222;border-radius:15px}textarea{background:none;border:0;color:#fff;resize:vertical;min-width:0;flex:1;font:inherit}form button{color:#111;background:#fff}footer{display:flex;gap:7px;align-items:center;flex-wrap:wrap}#status{color:#bbb;font-size:13px}@media(max-width:580px){main{grid-template-columns:98px minmax(0,1fr)}aside,section{padding:6px}header span{display:none}}
+</style></head><body><main><aside><header><img alt="Unique" src="data:image/png;base64,__LOGO__"><span>Unique</span></header><button id="new">New chat</button><nav aria-label="Conversations"></nav></aside><section><h1></h1><div id="log" role="log"></div><footer><button id="retry">Retry</button><button id="clear">Clear chat</button><span id="status" role="status"></span></footer><form><textarea rows="2" aria-label="Message" placeholder="Message Unique…"></textarea><button id="send" type="submit">Send</button></form></section></main>
+<script type="module">
+const cfg=__CONFIG__;
+const $=s=>document.querySelector(s), log=$("#log"), prompt=$("textarea"), status=$("#status");
+const chats=[[]];let current=0,busy=false,model;
+document.title=cfg.title;
+function label(messages){return messages[0]?.content.slice(0,48)||"New conversation"}
+function draw(){
+ const messages=chats[current]; $("h1").textContent=messages.length?label(messages):cfg.title;
+ log.replaceChildren();for(const m of messages){const row=document.createElement("div");row.className="msg "+m.role;row.textContent=m.content;log.append(row)}
+ log.scrollTop=log.scrollHeight;$("nav").replaceChildren();
+ chats.forEach((c,i)=>{const b=document.createElement("button");b.textContent=label(c);b.disabled=busy;b.className=i===current?"selected":"";b.onclick=()=>{current=i;prompt.value="";status.textContent="";draw()};$("nav").prepend(b)});
+ for(const id of ["#new","#send","#retry","#clear"])$(id).disabled=busy||((id==="#retry"||id==="#clear")&&!messages.length)
+}
+async function answer(history,text,update){
+ if(cfg.mode==="python"){
+ const r=await fetch("/reply",{method:"POST",headers:{"Content-Type":"application/json","X-Unique-Chat":"1"},body:JSON.stringify({history,message:text})});
+ if(!r.ok)throw Error("Chat request failed ("+r.status+").");
+ const reader=r.body.getReader(),decoder=new TextDecoder();let buffer="";
+ while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value,{stream:!done});let e;
+ while((e=buffer.indexOf("\n"))>=0){const line=buffer.slice(0,e);buffer=buffer.slice(e+1);const item=JSON.parse(line);if(item.error)throw Error(item.error);if(item.text)update(item.text)}if(done)break}
+ }else{
+ status.textContent=model?"Generating…":"Loading model into this browser…";
+ const {pipeline,TextStreamer,env}=await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2");
+ env.allowLocalModels=false;env.backends.onnx.wasm.numThreads=1;
+ if(!model)model=await pipeline("text-generation",cfg.model,{device:"wasm",dtype:"q4"});
+ status.textContent="Generating…";
+ const streamer=new TextStreamer(model.tokenizer,{skip_prompt:true,skip_special_tokens:true,callback_function:update});
+ await model([...history,{role:"user",content:text}],{max_new_tokens:128,do_sample:false,streamer});
+ }}
+async function respond(retry){
+ if(busy)return;const messages=chats[current],before=messages.slice(),text=retry?messages.at(-2)?.content:prompt.value.trim();if(!text)return;
+ const prior=retry?messages.slice(0,-2):messages.slice();messages.splice(0,messages.length,...prior,{role:"user",content:text},{role:"assistant",content:""});
+ busy=true;status.textContent="Generating…";draw();
+ try{await answer(prior,text,chunk=>{messages.at(-1).content+=chunk;log.lastChild.textContent=messages.at(-1).content;log.scrollTop=log.scrollHeight});if(!messages.at(-1).content.trim())throw Error("Empty reply. Please try again.");if(!retry)prompt.value="";status.textContent=""}
+ catch(e){messages.splice(0,messages.length,...before);status.textContent=e.message}
+ finally{busy=false;draw();prompt.focus()}
+}
+$("form").onsubmit=e=>{e.preventDefault();respond(false)};prompt.onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();respond(false)}};
+$("#new").onclick=()=>{if(chats[current].length){current=chats.push([])-1;prompt.value="";status.textContent="";draw()}};
+$("#clear").onclick=()=>{chats[current]=[];prompt.value="";status.textContent="";draw()};$("#retry").onclick=()=>respond(true);draw();
+</script></body></html>
