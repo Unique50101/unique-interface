@@ -1,0 +1,33 @@
+name: Publish Unique Interface container
+on:
+  push:
+    branches: [main]
+    paths:
+      - examples/docker-space/Dockerfile
+      - examples/docker-space/app.py
+      - .github/workflows/container.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and check the packaged app
+        run: |
+          image=ghcr.io/unique50101/unique-interface
+          docker build --label org.opencontainers.image.source=https://github.com/Unique50101/unique-interface -t "$image:latest" examples/docker-space
+          version=$(docker run --rm "$image:latest" python -c 'from importlib.metadata import version; print(version("unique-interface"))')
+          docker tag "$image:latest" "$image:$version"
+          docker run -d --name demo -p 127.0.0.1:7860:7860 "$image:latest"
+          curl --fail --retry 15 --retry-all-errors --retry-delay 1 http://127.0.0.1:7860/api/schema
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Push the verified container
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push "ghcr.io/unique50101/unique-interface:$VERSION"
+          docker push ghcr.io/unique50101/unique-interface:latest
