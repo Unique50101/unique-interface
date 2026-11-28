@@ -94,7 +94,7 @@ class ChatInterface:
         sidebar = w.VBox([brand, self.new, self._links]).add_class("uc-sidebar")
         self._title = w.HTML()
         self.log = w.HTML().add_class("uc-log")
-        self.prompt = w.Text(placeholder="Message Unique…", continuous_update=False)
+        self.prompt = w.Text(placeholder="Message Unique…", continuous_update=True)
         self.status = w.Label().add_class("uc-status")
         self.send = _button("Send")
         self.retry = _button("Retry last reply")
