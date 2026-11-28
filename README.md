@@ -1,6 +1,8 @@
 # Unique Interface
 
-A compact, monochrome interface for Python chat and file-review tools. The notebook chat is centered and capped at 800 px, with a 144 px conversation sidebar on larger screens. User prompts appear on the right, answers on the left. Press **Enter** to send. Retry replaces the last answer, and New chat starts a separate conversation in the current session.
+Build a browser interface for a Python function, chat model, or file-review tool. Run it locally, share a temporary URL, or deploy the app in a Docker Space. The notebook chat is centered and capped at 800 px, with a 144 px conversation sidebar on larger screens. User prompts appear on the right, answers on the left. Press **Enter** to send. Retry replaces the last answer, and New chat starts a separate conversation in the current session.
+
+[Developer guide](https://uniqueopensources.web.app/docs/unique-interface) · [Python package on PyPI](https://pypi.org/project/unique-interface/) · [Docker image on GitHub Packages](https://github.com/Unique50101/unique-interface/pkgs/container/unique-interface)
 
 [Try the public UniqueChat Space](https://huggingface.co/spaces/unique50101/UniqueChat) · [Open UniqueChat in Colab](https://colab.research.google.com/github/Unique50101/uniquechat/blob/main/UniqueChat.ipynb) · [Open SheetReview in Colab](https://colab.research.google.com/github/Unique50101/unique-sheetreview/blob/main/SheetReview.ipynb)
 
